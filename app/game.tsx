@@ -180,8 +180,8 @@ class Game extends React.Component<MyProps, MyState> {
     }
 
     newPiece(){
-        this.currentShape = this.state.nextShape ?? 'FILONS'.split('')[Math.floor(Math.random() * 6)]
-        this.setState({nextShape: 'FILONS'.split('')[Date.now() % 6]})
+        this.currentShape = this.state.nextShape ?? 'FILTONS'.split('')[Math.floor(Math.random() * 6)]
+        this.setState({nextShape: 'FILTONS'.split('')[Date.now() % 6]})
     }
 
     render() {
