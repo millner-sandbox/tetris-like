@@ -1,6 +1,6 @@
 {
-  "name": "tetris",
-  "version": "0.1.0",
+  "name": "tantris",
+  "version": "0.1.1",
   "private": true,
   "scripts": {
     "dev": "next dev",

@@ -1,11 +1,13 @@
 # TRISTAN's TETRIS
 Hi, you are looking at an attempt to build a TETRIS using NextJS and its friends ReactJS, TypeScript, TailWind just as a sand box.
 
-I'm trying stuff on purpose: using React with classes or functions, using async methods, using SSR... don't look for a purpose on every choice.
+I'm trying stuff on purpose: using React with classes or functions, using async methods, using SSR... don't look for a strong logic behind every choice.
 
 Sounds are pixabay's.
 
 This is a [Next.js](https://nextjs.org/) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+
+It is auto-deployed to [Vercel](https://tetris-like.vercel.app/).
 
 ## Getting Started
 
