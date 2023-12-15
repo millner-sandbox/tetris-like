@@ -1,6 +1,6 @@
 'use client'
 
-import React, { ReactElement } from "react";
+import { ReactElement, useEffect, useState } from "react";
 import { boardSerializer } from './common/helpers'
 import Item from "./item";
 import Block from './block'
@@ -11,8 +11,6 @@ const storage = (typeof window !== 'undefined' ? localStorage : { setItem(){}, g
 // board size could be defined as constants, but
 // then for consistency, we should use them in CSS too, cumbersome for now, see later if it makes sense
 
-type MyProps = {
-}
 
 type MyState = {
     score: number;
@@ -20,7 +18,7 @@ type MyState = {
     running: boolean;   // currently responding (not in the middle of some blocking action)
     over: boolean;      // game lost
     currentItem: ReactElement | null;
-    board: Array<Array<string | null>>;
+    currentShape: string;
     nextShape: string | null;
     speed: number;      // speed increases with score
     highscores: Array<number>;
@@ -41,98 +39,91 @@ const SOUNDS = {
 }
 
 
-// some overloaded type hints, for IDE mostly
-class Game extends React.Component<MyProps, MyState> {
-    currentShape!: string;
+function Game () {
+    // we keep a bunch of simple variables in a "state" container
+    // note that using one variable means that every time we want to change one value, we need to copy the rest (state => {...state, value})
+    const [state, setState] = useState({
+        score: 0,
+        speed: 1,
+        running: true,
+        over: false,
+        started: false,
+        currentItem: <div />,
+        currentShape: 'I',
+        nextShape: null,
+        highscores: [] as Array<number>,
+    } as MyState)
 
-    constructor(props: MyProps) {
-        super(props);
-        this.state = {
-            score: 0,
-            speed: 1,
-            running: true,
-            over: false,
-            started: false,
-            currentItem: <div />,
-            nextShape: null,
-            highscores: [] as Array<number>,
-            // setup board as 10x20 matric (x, y)
-            board : Array.from(Array(10), () => new Array(20).fill(null)),
-        };
+    // but we keep the large board apart, it's a 10x20 matrix (x, y)
+    const [gameBoard, setGameBoard] = useState(() => Array.from(Array(10), () => new Array(20).fill(null)))
 
+
+    useEffect(() => {
+        // runs once, just like componentDidMount
+        setState({ ...state, highscores:(JSON.parse(storage?.getItem('highscores') ?? '[2000, 1000, 500, 100]')) as Array<number> })
+      }, [])
+
+    const start = () => {
+        newPiece()
+        setState(state => ({ ...state, started: true }))
     }
 
-    componentDidMount(): void {
-        this.setState({ highscores:(JSON.parse(storage?.getItem('highscores') ?? '[2000, 1000, 500, 100]')) as Array<number> })
-    }
-
-    start = () => {
-        this.newPiece()
-        this.setState({ started: true })
-    }
-
-    audio(sound:string, volume = 0.6){
+    const audio = (sound:string, volume = 0.6) => {
         // we could probably reuse the Audie element, just not the point of this work
         const myAudioElement = new Audio(sound)
         myAudioElement.volume = volume
 
-        myAudioElement.addEventListener("canplaythrough", (event) => {
-            myAudioElement.play();
-        });
+        myAudioElement.addEventListener("canplaythrough", (event) => myAudioElement.play());
     }
 
-    isEmpty(x:number, y:number){
-        return !this.state.board[x][y]
-    }
+    const isEmpty = (x:number, y:number) => !gameBoard[x][y]
 
-    isWithinBound(x:number, y:number){
-        return x >= 0 && y >= 0 && x < 10 && y < 20
-    }
+    const isWithinBound = (x:number, y:number) => x >= 0 && y >= 0 && x < 10 && y < 20
 
-    gameOver(){
-        const highscores = this.state.highscores
-        highscores.push(this.state.score)
+    const gameOver = () => {
+        const highscores = state.highscores
+        highscores.push(state.score)
         highscores.sort((a,b) => a > b ? -1 : 1)
         storage?.setItem('highscores', JSON.stringify(highscores.slice(0, 5)))
-        this.setState({running: false, over: true, highscores})
-        this.audio(SOUNDS.sadTrombone)
+        setState(state => ({...state, running: false, over: true, highscores}))
+        audio(SOUNDS.sadTrombone)
     }
 
-    fixBlock(x0:number, y0:number, shape:string, matrix:Array<Array<string | null>>){
-        if(this.state.over){
+    // called when a block hits something below and needs to be attached to the board
+    const fixBlock = (x0:number, y0:number, shape:string, matrix:Array<Array<string | null>>) => {
+        if(state.over){
             console.log('OVER')
             return
         }
-        this.audio(SOUNDS.blob)
-        const board = structuredClone(this.state.board)
+        audio(SOUNDS.blob)
+        const board = structuredClone(gameBoard)
 
         matrix.forEach((col, block_x) => col.forEach((block, block_y) => {
             if(!block) return;
             const x = x0 + block_x, y = y0 + block_y
             if(y === 0){
-                this.gameOver()
+                gameOver()
             }
-            if(!this.isWithinBound(x,y)) {
+            if(!isWithinBound(x,y)) {
                 return
             }
             board[x][y] = shape
         }))
 
         // update board, then check if any line is complete
-        this.setState({ board },
-            () =>  this.checklines(y0, 4)
-        )
+        setGameBoard(board)
+        checklines(board, y0, 4)
 
     }
 
-    // check if any row is complete
-    checklines(y0:number, height:number){
-        this.setState({running : false })
+    // check if any row is complete and needs to be removed
+    const checklines = (board: Array<Array<string | null>>, y0:number, height:number) => {
+        setState(state => ({ ...state, running: false }))
         const rowsToRemove = [] as number[]
         for(let y = y0; y < Math.min(20, y0+height); y++){
             let anyEmpty = false
             for(let x=0; x < 10; x++){
-                if(!this.state.board[x][y]){
+                if(!board[x][y]){
                     anyEmpty = true
                     break
                 }
@@ -142,8 +133,10 @@ class Game extends React.Component<MyProps, MyState> {
             }
         }
 
+
         if(rowsToRemove.length === 0 ) {
-            this.setState({running : !this.state.over})
+            console.log('nothing')
+            setState(state => ({ ...state, running : !state.over}))
             return
         }
 
@@ -151,18 +144,21 @@ class Game extends React.Component<MyProps, MyState> {
         // FULL lINES, YEAH
         // => play sound, increase score, and remove lines
         // 1. play sound (the more lines, the louder)
-        this.audio(SOUNDS.woosh, rowsToRemove.length / 4)
-        const board = structuredClone(this.state.board)
+        audio(SOUNDS.woosh, rowsToRemove.length / 4)
+
+        // 2. highlight blocks to be removed
         for(let y of rowsToRemove){
             for(let x=0; x < 10; x++){
                 board[x][y] = 'x'
             }
         }
-        this.setState({board})
+        setGameBoard(board)
 
+        // 3. remove those blocks
         setTimeout(() => {
-                const board = structuredClone(this.state.board)
-                const score = this.state.score + SCORING.ROWS_AT_ONCE[rowsToRemove.length-1]
+                // here we keep using the same "board" variable, since the state in this context is outdates
+                // since the game is paused, there should be no change to the board in between
+                const score = state.score + SCORING.ROWS_AT_ONCE[rowsToRemove.length-1]
                 let y0:number
                 while(y0 = rowsToRemove.shift() as number){
                     for(let y=y0; y >= 0; y--){
@@ -173,48 +169,48 @@ class Game extends React.Component<MyProps, MyState> {
                 }
                 const speed = SPEED_STEPS.findIndex(n => n > score)
 
-                this.setState({board, score, speed, running:!this.state.over})
+                setGameBoard(board)
+                setState(state => ({ ...state, score, speed, running:!state.over}))
             }
             ,1000
         )
     }
 
-    newPiece(){
-        this.currentShape = this.state.nextShape ?? 'FILTONS'.split('')[Math.floor(Math.random() * 6)]
-        this.setState({nextShape: 'FILTONS'.split('')[Date.now() % 6]})
+    const newPiece = () => {
+        const currentShape = state.nextShape ?? 'FILTONS'.split('')[Math.floor(Math.random() * 7)]
+        console.log('NEW', currentShape)
+        setState(state => ({ ...state, currentShape, nextShape: 'FILTONS'.split('')[Date.now() % 7]}))
     }
 
-    render() {
-        return (
-            <div className="game-container">
-                <div className="sidebar">
-                    <div className="side-box text-xl">
-                        <h2>High Scores</h2>
-                        <ul>{
-                            this.state.highscores.map((score, key) => <li key={key}>{score}</li>)
-                            }</ul>
-                    </div>
-                </div>
-                <div className="game">
-                    { this.state.over && <div className="absolute text-lg z-10 bg-black text-white font-bold py-2 px-4 w-full rounded">GAME OVER</div>}
-                    { this.state.started ? 
-                        <FallingItem speed={this.state.speed} isRunning={() => this.state.running} newPiece={this.newPiece.bind(this)} isEmpty={this.isEmpty.bind(this)} isWithinBound={this.isWithinBound.bind(this)} fixBlock={this.fixBlock.bind(this)} shape={this.currentShape} />
-                         : 
-                         <button className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 m-8 rounded" onClick={this.start}>START</button>
-                    }
-                    { this.state.board.map((col, x) => col.map((shape, y) => 
-                        shape ? <Block key={x+10*(y+1)} x={x} y={y} color={shape}/> : undefined
-                    )) }
-                </div>
-                <div className="sidebar">
-                    <div className="side-box text-xl">{ this.state.score }</div>
-                    <div className="side-box h-48">
-                        { this.state.nextShape && <Item shape={this.state.nextShape} x={1.5} y={1} rotation={0}/>}
-                    </div>
+    return (
+        <div className="game-container">
+            <div className="sidebar">
+                <div className="side-box text-xl">
+                    <h2>High Scores</h2>
+                    <ul>{
+                        state.highscores.map((score, key) => <li key={key}>{score}</li>)
+                        }</ul>
                 </div>
             </div>
-        );
-    }
+            <div className="game">
+                { state.over && <div className="absolute text-lg z-10 bg-black text-white font-bold py-2 px-4 w-full rounded">GAME OVER</div>}
+                { state.started ? 
+                    <FallingItem speed={state.speed} isRunning={() => state.running} newPiece={newPiece} isEmpty={isEmpty} isWithinBound={isWithinBound} fixBlock={fixBlock} shape={state.currentShape} />
+                        : 
+                        <button className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 m-8 rounded" onClick={start}>START</button>
+                }
+                { gameBoard.map((col, x) => col.map((shape, y) => 
+                    shape ? <Block key={x+10*(y+1)} x={x} y={y} color={shape}/> : undefined
+                )) }
+            </div>
+            <div className="sidebar">
+                <div className="side-box text-xl">{ state.score }</div>
+                <div className="side-box h-48">
+                    { state.nextShape && <Item shape={state.nextShape} x={1.5} y={1} rotation={0}/>}
+                </div>
+            </div>
+        </div>
+    )
 }
 
 export default Game

@@ -28,6 +28,7 @@ const startingPoint = {x:4, y:0, rotation:0} as Position
 let currentItem:FallingItem
 if(typeof document !== 'undefined'){
   document.addEventListener('keydown', event => {
+    if(!currentItem) return
     const move = currentItem.move.bind(currentItem)
     switch (event.key) {
       case "ArrowDown":
